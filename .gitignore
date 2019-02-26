@@ -1,3 +1,5 @@
-./code/learning-to-reweight-examples/.ipynb_checkpoints
-./code/learning-to-reweight-examples/data
-./code/.ipynb_checkpoints
+learning-to-reweight-examples/
+mnist/
+serving/
+tf-serve/
+tfserving/
