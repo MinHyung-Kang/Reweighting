@@ -219,17 +219,52 @@ class LeNet(MetaModule):
         x = x.view(-1, 120)
         return self.fc_layers(x).squeeze()
 
-def get_build_model(dataset):
+# https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
+class CIFAR_Simple_Net(MetaModule):
+    def __init__(self, n_out):
+        super(CIFAR_Simple_Net, self).__init__()
+        layers = []
+        layers.append(MetaConv2d(3, 6, kernel_size=5))
+        layers.append(nn.ReLU(inplace=True))
+        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+        layers.append(MetaConv2d(6, 16, kernel_size=5))
+        layers.append(nn.ReLU(inplace=True))
+        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+        self.main = nn.Sequential(*layers)
+
+        layers = []
+        layers.append(MetaLinear(16 * 5 * 5, 120))
+        layers.append(nn.ReLU(inplace=True))
+        layers.append(MetaLinear(120, 84))
+        layers.append(nn.ReLU(inplace=True))
+        layers.append(MetaLinear(84, n_out))
+        self.fc_layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.main(x)
+        x = x.view(-1, 16 * 5 * 5)
+        x = self.fc_layers(x)
+        return x
+
+def get_build_model(dataset, kwargs):
     if dataset == MNIST:
         def build_model():
-            net = LeNet(n_out=1)
+            net = LeNet(**kwargs)
 
             if torch.cuda.is_available():
                 net.cuda()
                 torch.backends.cudnn.benchmark=True
     
             return net
-    elif dataset == 'TODO':
+    elif dataset == CIFAR:
+        def build_model():
+            net = CIFAR_Simple_Net(**kwargs)
+
+            if torch.cuda.is_available():
+                net.cuda()
+                torch.backends.cudnn.benchmark=True
+    
+            return net
         pass
     else:
         pass

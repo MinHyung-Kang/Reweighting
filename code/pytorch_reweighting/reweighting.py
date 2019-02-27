@@ -17,20 +17,14 @@ from model import *
 from constants import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default='mnist', 
-                        choices=['mnist', 'TODO', 'custom'])
+parser.add_argument('--dataset', type=str, default=MNIST, 
+                        choices=[MNIST, CIFAR, 'custom'])
 parser.add_argument('--data_path', type=str, default=None)
 parser.add_argument('--alpha', type=float, default=0.01)
 parser.add_argument('--batch_size', type=int, default=100)
 
 class Reweighting():
-    def __init__(self, dataset_name=None, data_path=None, alpha=0.01, batch_size=100, 
-            data_loader=None, val_loader=None, test_loader=None, build_model=None, loss=None):
-        self.dataset_name = dataset_name
-        self.data_path = data_path
-        self.alpha = alpha
-        self.batch_size = batch_size
-
+    def __init__(self, data_loader=None, val_loader=None, test_loader=None, build_model=None, loss=None):
         # to be defined during setup_model if a defined dataset
         self.data_loader = data_loader
         self.val_loader = val_loader
@@ -38,33 +32,60 @@ class Reweighting():
         self.build_model = build_model
         self.loss = loss
 
+        self.dataset_name = None
+
         self.predict = lambda output: output # predict function, to be overriden for testing if necessary
         self.label = lambda output: output # labeling function to be overridden if necessary
 
-    def setup_model(self, classes=[9,4], weights=[0.995,0.005], train_type='reweight'):
-        print("Getting data loader")
+    def setup_data(self, dataset_name=None, classes=[9,4], weights=[0.995,0.005], batch_size=100, train_type='reweight'):
+        print("="*50)
+        print(f"Getting data loader for {dataset_name}")
+        self.dataset_name = dataset_name
+        self.classes = classes
+        self.batch_size = batch_size
+
         if self.dataset_name is not None:
             (self.data_loader, self.val_loader) = get_data_loader(self.dataset_name, self.batch_size, classes=classes, weights=weights, mode="train", train_type=train_type)
             (self.test_loader, _) = get_data_loader(self.dataset_name, self.batch_size, classes=classes, weights=weights, mode="test", train_type=train_type)
-            self.build_model = get_build_model(self.dataset_name)
-
-        if self.dataset_name == MNIST:
-            self.loss = F.binary_cross_entropy_with_logits
-            self.label = lambda output: (output == classes[1]).int().float()
-            self.predict = lambda output: (F.sigmoid(output) > 0.5).int()
-        elif self.dataset_name == 'TODO':
-            pass
+            kwargs = { 'n_out': len(classes)}
+            self.build_model = get_build_model(self.dataset_name, kwargs)
         else:
-            # TODO: custom model - should be defined
             assert self.data_loader is not None
             assert self.test_loader is not None
             assert self.build_model is not None
+
+        print("Data loader initialized")
+        print("="*50)
+            
+
+    def setup_model(self):
+        print("="*50)
+        print(f"Setting up model for dataset {self.dataset_name}")
+
+        if self.dataset_name == MNIST:
+            self.loss = F.binary_cross_entropy_with_logits
+            self.label = lambda output: (output == self.classes[1]).int().float()
+            self.predict = lambda output: (F.sigmoid(output) > 0.5).int()
+        elif self.dataset_name == CIFAR:
+            self.loss = F.cross_entropy
+            self.label = lambda output: torch.tensor(list(map(self.classes.index, output.int())))
+            def predict(output):
+                vals, inds = torch.max(F.log_softmax(output, dim=1), 1)                
+                return inds
+                #return torch.tensor([self.classes[ind] for ind in inds.int().numpy()])
+            self.predict = predict
+        elif self.dataset_name is None:
             assert self.loss is not None
+
+        print("Model setup finished")
+        print("="*50)
+
 
     def train(self, num_iter=8000, learning_rate=0.001):
         '''
             perform regular training
         '''
+        print("="*50)
         print("Starting regular training")
         self.net = self.build_model()
         opt = torch.optim.SGD(self.net.params(), lr=learning_rate)
@@ -96,7 +117,10 @@ class Reweighting():
             if i % plot_step == 0:
                 self.evaluate_and_record(i, None, net_losses, accuracy_log)
 
-    def train_reweighted(self, num_iter=8000, learning_rate=0.001):
+        print("="*50)
+
+    def train_reweighted(self, num_iter=8000, learning_rate=0.001, alpha=0.01):
+        print("="*50)
         print("Starting train_reweighted")
         self.net = self.build_model()
         opt = torch.optim.SGD(self.net.params(), lr=learning_rate)
@@ -143,7 +167,7 @@ class Reweighting():
             
             # Line 6 perform a parameter update
             grads = torch.autograd.grad(l_f, (meta_net.params()), create_graph=True)
-            meta_net.update_params(self.alpha, source_params=grads)
+            meta_net.update_params(alpha, source_params=grads)
             
             # Line 8 - 10 2nd forward pass and getting the gradients with respect to epsilon
             y_val_hat = meta_net(X_val)
@@ -176,6 +200,9 @@ class Reweighting():
 
             if i % plot_step == 0:
                 self.evaluate_and_record(i, meta_losses, net_losses, accuracy_log)
+
+        print("train_reweighted finished")
+        print("="*50)
                 
             # return accuracy
         return np.mean(acc_log[-6:-1, 1])
@@ -221,6 +248,8 @@ class Reweighting():
         plt.show()
 
     def run(self, train_type='reweight', classes=[9,4], weights=[0.995,0.005]):
+        self.setup_data()
+
         self.setup_model()
 
         if train_type == 'reweight':
