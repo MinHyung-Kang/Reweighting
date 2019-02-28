@@ -62,18 +62,19 @@ class Reweighting():
         print("="*50)
         print(f"Setting up model for dataset {self.dataset_name}")
 
-        if self.dataset_name == MNIST:
-            self.loss = F.binary_cross_entropy_with_logits
-            self.label = lambda output: (output == self.classes[1]).int().float()
-            self.predict = lambda output: (F.sigmoid(output) > 0.5).int()
-        elif self.dataset_name == CIFAR:
+        if self.dataset_name in [MNIST, CIFAR]:
             self.loss = F.cross_entropy
             self.label = lambda output: torch.tensor(list(map(self.classes.index, output.int())))
             def predict(output):
                 vals, inds = torch.max(F.log_softmax(output, dim=1), 1)                
                 return inds
-                #return torch.tensor([self.classes[ind] for ind in inds.int().numpy()])
             self.predict = predict
+            '''
+            # Binary classification case
+            self.loss = F.binary_cross_entropy_with_logits
+            self.label = lambda output: (output == self.classes[1]).int().float()
+            self.predict = lambda output: (F.sigmoid(output) > 0.5).int()
+            '''
         elif self.dataset_name is None:
             assert self.loss is not None
 
@@ -205,7 +206,7 @@ class Reweighting():
         print("="*50)
                 
             # return accuracy
-        return np.mean(acc_log[-6:-1, 1])
+        return np.mean(accuracy_log[-6:-1, 1])
 
     def evaluate(self):
         self.net.eval()
