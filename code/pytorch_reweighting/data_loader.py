@@ -20,12 +20,12 @@ from constants import *
 
 class ImbalancedData(): 
     def __init__(self, dataset_name=MNIST, n_items = 5000, classes=[9, 4], weights=[0.9, 0.1], 
-            n_val_per_class=5, random_seed=1, mode="train", train_type="reweight"):
+            n_vals_per_class=[5,5], random_seed=1, mode="train", train_type="reweight"):
         self.dataset_name = dataset_name
         self.n_items = n_items
         self.classes = classes
         self.weights = weights
-        self.n_val_per_class = n_val_per_class
+        self.n_vals_per_class = n_vals_per_class
         self.mode = mode
         self.train_type = train_type
 
@@ -61,8 +61,7 @@ class ImbalancedData():
         else:
             self.dataset = self.dataset(DATA_DIR, train=False, download=True, transform=self.transform)
             
-            self.weights = [1.0] * len(self.classes)
-            n_val_per_class = 0
+            n_vals_per_class = [0] * len(self.classes)
 
         self.weights = np.divide(self.weights, np.sum(self.weights))
 
@@ -94,9 +93,9 @@ class ImbalancedData():
                 data_indices = np.concatenate((data_indices, tmp_idx[:n_class[ind]]))
 
                 if self.mode == 'train':
-                    val_indices = np.concatenate((val_indices, tmp_idx[n_class[ind]:n_class[ind] + self.n_val_per_class]))    
+                    val_indices = np.concatenate((val_indices, tmp_idx[n_class[ind]:n_class[ind] + self.n_vals_per_class[ind]]))    
             else:
-                data_indices = np.concatenate((data_indices, tmp_idx[:n_class[ind] + self.n_val_per_class]))
+                data_indices = np.concatenate((data_indices, tmp_idx[:n_class[ind] + self.n_vals_per_class[ind]]))
 
                         
         # create loader for train/test data
@@ -111,18 +110,18 @@ class ImbalancedData():
 
 
 def get_data_loader(dataset_name, batch_size, classes=[9, 4], n_items=5000, weights=[0.9, 0.1], 
-        n_val_per_class=5, mode='train', train_type="reweight"):
+        n_vals_per_class=[5,5], mode='train', train_type="reweight"):
     """Build and return data loader."""
-
+    print(f"Loading {mode} data")
     wrapper = ImbalancedData(dataset_name=dataset_name, classes=classes, n_items=n_items, weights=weights, 
-        n_val_per_class=n_val_per_class, mode=mode, train_type=train_type)
+        n_vals_per_class=n_vals_per_class, mode=mode, train_type=train_type)
     
     data_loader = DataLoader(
         wrapper.dataset, batch_size=batch_size, sampler=wrapper.data_sampler
     )
 
     val_loader = None if mode != 'train' else DataLoader(
-        wrapper.dataset, batch_size=n_val_per_class * len(classes), sampler=wrapper.val_sampler
+        wrapper.dataset, batch_size=sum(n_vals_per_class), sampler=wrapper.val_sampler
     )     
 
     return (data_loader, val_loader)
